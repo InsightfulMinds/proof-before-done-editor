@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proof Before Done — an evidence editor for agent completion reports</title>
+<meta name="description" content="An evidence editor that reviews agent completion reports. It catches the sentence that says done before the report has earned it. ACCEPT, RETURN, or ESCALATE.">
+<style>
+:root{
+  --bg:#0a0a0b;
+  --bg-raise:#111113;
+  --bg-panel:#141416;
+  --line:#232326;
+  --line-bright:#3a3a3f;
+  --txt:#e8e8ea;
+  --txt-dim:#9a9aa2;
+  --txt-faint:#5f5f66;
+  --chrome:#d7dde3;
+  --steel:#8fa8b8;
+  --brass:#c2a05c;
+  --brass-dim:#8a7443;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+/* faint scan grid */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(0deg,transparent 0 2px,rgba(255,255,255,.006) 2px 4px),
+    radial-gradient(ellipse 90% 60% at 50% -10%,rgba(143,168,184,.05),transparent 60%);
+}
+main,header.site,footer.site{position:relative;z-index:1}
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+a{color:var(--steel);text-decoration:none;border-bottom:1px solid var(--line-bright);transition:color .15s,border-color .15s}
+a:hover{color:var(--chrome);border-color:var(--steel)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--steel);outline-offset:3px}
+::selection{background:var(--brass);color:#0a0a0b}
+
+/* ---------- top bar ---------- */
+header.site{border-bottom:1px solid var(--line)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 0;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;font-size:13px;letter-spacing:.08em}
+.brand .sig{color:var(--brass);font-weight:700}
+.brand .path{color:var(--txt-faint)}
+.topnav{display:flex;gap:22px;font-size:12px;letter-spacing:.06em}
+.topnav a{border-bottom:none;color:var(--txt-dim)}
+.topnav a:hover{color:var(--chrome)}
+
+/* ---------- hero ---------- */
+.hero{padding:84px 0 64px;border-bottom:1px solid var(--line)}
+.hero .kicker{color:var(--txt-faint);font-size:12px;letter-spacing:.28em;text-transform:uppercase;margin-bottom:28px}
+.hero .kicker b{color:var(--brass);font-weight:700}
+h1{
+  font-size:clamp(2.1rem,5.4vw,4.4rem);
+  line-height:1.06;
+  font-weight:700;
+  letter-spacing:-.01em;
+  max-width:17ch;
+}
+h1 .ghost{color:var(--txt-faint);text-decoration:line-through;text-decoration-color:var(--brass-dim);text-decoration-thickness:3px}
+h1 .metal{
+  background:linear-gradient(105deg,#f4f6f8 0%,#aeb6bd 38%,#eef1f4 52%,#8f979e 70%,#dfe4e8 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero .sub{max-width:62ch;color:var(--txt-dim);margin:30px 0 40px;font-size:16px}
+.hero .sub strong{color:var(--txt);font-weight:700}
+.cta-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.btn{
+  display:inline-block;font-family:var(--mono);font-size:13px;letter-spacing:.06em;
+  padding:13px 22px;border:1px solid var(--line-bright);color:var(--txt);
+  background:var(--bg-raise);cursor:pointer;border-bottom-width:1px;
+  transition:border-color .15s,background .15s,transform .15s;
+}
+.btn:hover{border-color:var(--steel);background:var(--bg-panel);color:var(--chrome);transform:translateY(-1px)}
+.btn.primary{border-color:var(--brass-dim);color:var(--brass);background:linear-gradient(180deg,rgba(194,160,92,.10),rgba(194,160,92,.03))}
+.btn.primary:hover{border-color:var(--brass);color:#e8d5ab}
+.cta-note{font-size:12px;color:var(--txt-faint)}
+
+/* ---------- terminal (signature) ---------- */
+.term-section{padding:72px 0;border-bottom:1px solid var(--line)}
+.term{
+  border:1px solid var(--line-bright);
+  background:var(--bg-panel);
+  box-shadow:0 30px 80px -30px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.02) inset;
+}
+.term-head{
+  display:flex;align-items:center;gap:8px;
+  padding:11px 16px;border-bottom:1px solid var(--line);
+  background:var(--bg-raise);
+}
+.dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--line-bright);background:linear-gradient(145deg,#3c3c42,#232327)}
+.term-title{margin-left:10px;font-size:12px;color:var(--txt-faint);letter-spacing:.08em}
+.term-body{padding:26px 26px 6px;font-size:13.5px;line-height:1.85;overflow-x:auto}
+.t-line{white-space:pre-wrap}
+.js .t-line{opacity:0;transform:translateY(4px)}
+.js .term.play .t-line{animation:tin .35s forwards}
+@keyframes tin{to{opacity:1;transform:none}}
+.t-prompt{color:var(--steel)}
+.t-dim{color:var(--txt-faint)}
+.t-quote{color:var(--txt-dim);font-style:italic}
+.t-flag{color:var(--brass);font-weight:700}
+.t-sev{display:inline-block;border:1px solid var(--brass-dim);color:var(--brass);padding:0 7px;font-size:11px;letter-spacing:.1em;margin-right:8px}
+.t-ask{color:var(--chrome)}
+.cursor{display:inline-block;width:9px;height:17px;background:var(--chrome);vertical-align:-3px;animation:blink 1.05s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.js .t-line{opacity:1;transform:none}.cursor{animation:none}}
+
+/* verdict stamp */
+.stamp-row{display:flex;justify-content:flex-end;padding:0 26px 30px}
+.stamp{
+  font-size:20px;font-weight:700;letter-spacing:.3em;padding:10px 22px 10px 26px;
+  border:3px double var(--brass);color:var(--brass);
+  transform:rotate(-4deg);
+  text-shadow:0 0 22px rgba(194,160,92,.35);
+}
+.js .stamp{opacity:0}
+.js .term.play .stamp{animation:slam .4s cubic-bezier(.2,1.6,.4,1) 4.4s forwards}
+@keyframes slam{
+  0%{opacity:0;transform:rotate(-4deg) scale(2.4)}
+  70%{opacity:1;transform:rotate(-4deg) scale(.96)}
+  100%{opacity:1;transform:rotate(-4deg) scale(1)}
+}
+@media (prefers-reduced-motion:reduce){.js .stamp{animation:none;opacity:1}}
+
+/* ---------- sections ---------- */
+section{padding:76px 0;border-bottom:1px solid var(--line)}
+.sec-label{color:var(--txt-faint);font-size:12px;letter-spacing:.28em;text-transform:uppercase;margin-bottom:14px}
+.sec-label::before{content:"// ";color:var(--brass-dim)}
+h2{font-size:clamp(1.4rem,3vw,2.1rem);font-weight:700;letter-spacing:-.01em;max-width:30ch;margin-bottom:18px}
+.lede{color:var(--txt-dim);max-width:66ch;margin-bottom:44px}
+.lede strong{color:var(--txt)}
+
+/* failure patterns */
+.patterns{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line)}
+.pattern{background:var(--bg);padding:28px 24px 32px;transition:background .2s}
+.pattern:hover{background:var(--bg-raise)}
+.pattern .num{color:var(--brass-dim);font-size:12px;letter-spacing:.15em;margin-bottom:16px}
+.pattern h3{font-size:16px;margin-bottom:12px;color:var(--chrome)}
+.pattern p{font-size:13.5px;color:var(--txt-dim)}
+.pattern p em{color:var(--txt);font-style:normal;font-weight:700}
+
+/* verdicts */
+.verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.verdict{border:1px solid var(--line-bright);background:var(--bg-panel);padding:30px 26px 34px;position:relative}
+.verdict::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
+.verdict.accept::before{background:linear-gradient(90deg,var(--chrome),transparent)}
+.verdict.return::before{background:linear-gradient(90deg,var(--steel),transparent)}
+.verdict.escalate::before{background:linear-gradient(90deg,var(--brass),transparent)}
+.verdict .word{font-size:19px;font-weight:700;letter-spacing:.22em;margin-bottom:14px}
+.verdict.accept .word{color:var(--chrome)}
+.verdict.return .word{color:var(--steel)}
+.verdict.escalate .word{color:var(--brass)}
+.verdict p{font-size:13.5px;color:var(--txt-dim)}
+
+/* rules strip */
+.rules{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line)}
+.rule{background:var(--bg);padding:26px 26px 30px;display:flex;gap:18px;align-items:baseline}
+.rule .mark{color:var(--brass);font-weight:700;font-size:15px}
+.rule div{font-size:13.5px;color:var(--txt-dim)}
+.rule div b{color:var(--txt)}
+
+/* setup */
+.steps{counter-reset:step;max-width:760px}
+.step{display:flex;gap:22px;padding:22px 0;border-bottom:1px dashed var(--line)}
+.step:last-child{border-bottom:none}
+.step::before{
+  counter-increment:step;content:"0" counter(step);
+  color:var(--brass-dim);font-weight:700;font-size:14px;min-width:32px;padding-top:2px;
+}
+.step div{font-size:14px;color:var(--txt-dim)}
+.step div b{color:var(--txt)}
+.step code{background:var(--bg-panel);border:1px solid var(--line);padding:2px 8px;font-size:12.5px;color:var(--chrome);word-break:break-word}
+
+/* one number */
+.number-band{text-align:center;padding:86px 0}
+.number-band .big{
+  font-size:clamp(3rem,8vw,6rem);font-weight:700;line-height:1;
+  background:linear-gradient(105deg,#f4f6f8,#9aa2a9 45%,#e8ecef 60%,#868e95);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.number-band .under{color:var(--txt-dim);margin-top:18px;font-size:14px;max-width:56ch;margin-left:auto;margin-right:auto}
+.number-band .under b{color:var(--txt)}
+
+/* ---------- in-page demo ---------- */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:stretch}
+.demo-col h3{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:14px}
+.sample-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.sample-tab{
+  font-family:var(--mono);font-size:12px;letter-spacing:.05em;cursor:pointer;
+  padding:8px 14px;border:1px solid var(--line-bright);background:var(--bg-raise);color:var(--txt-dim);
+  transition:all .15s;
+}
+.sample-tab:hover{color:var(--chrome);border-color:var(--steel)}
+.sample-tab[aria-pressed="true"]{border-color:var(--brass);color:var(--brass);background:linear-gradient(180deg,rgba(194,160,92,.1),transparent)}
+.report-input{
+  width:100%;min-height:300px;resize:vertical;
+  font-family:var(--mono);font-size:13px;line-height:1.7;
+  background:var(--bg-panel);border:1px solid var(--line-bright);color:var(--txt);
+  padding:18px;caret-color:var(--brass);
+}
+.report-input:focus{outline:2px solid var(--steel);outline-offset:2px}
+.demo-run{margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.demo-out{
+  border:1px solid var(--line-bright);background:var(--bg-panel);min-height:300px;
+  padding:20px 22px;font-size:13px;line-height:1.85;position:relative;overflow-x:auto;
+}
+.demo-out .placeholder{color:var(--txt-faint)}
+.d-line{white-space:pre-wrap;opacity:0;transform:translateY(4px);animation:tin .3s forwards}
+@media (prefers-reduced-motion:reduce){.d-line{animation:none;opacity:1;transform:none}}
+.demo-stamp{
+  position:absolute;right:22px;bottom:18px;
+  font-size:16px;font-weight:700;letter-spacing:.26em;padding:8px 16px 8px 20px;
+  border:3px double var(--brass);color:var(--brass);transform:rotate(-4deg);
+  text-shadow:0 0 18px rgba(194,160,92,.3);
+  animation:slam .35s cubic-bezier(.2,1.6,.4,1) forwards;opacity:0;
+}
+.demo-stamp.v-accept{border-color:var(--chrome);color:var(--chrome);text-shadow:0 0 18px rgba(215,221,227,.25)}
+.demo-stamp.v-return{border-color:var(--steel);color:var(--steel);text-shadow:0 0 18px rgba(143,168,184,.3)}
+@media (prefers-reduced-motion:reduce){.demo-stamp{animation:none;opacity:1}}
+
+/* footer */
+footer.site{padding:46px 0 60px;font-size:12.5px;color:var(--txt-faint)}
+.foot-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.foot-row a{color:var(--txt-dim)}
+
+@media (max-width:820px){
+  .patterns,.verdicts,.rules{grid-template-columns:1fr}
+  .hero{padding:56px 0 48px}
+  section{padding:56px 0}
+  .term-body{font-size:12.5px;padding:20px 16px 24px}
+  .stamp-row{padding:0 16px 24px}
+}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap topbar">
+    <div class="brand"><span class="sig">▮</span> <span>proof-before-done</span><span class="path">~/editor</span></div>
+    <nav class="topnav" aria-label="Site">
+      <a href="#demo">demo</a>
+      <a href="#failures">failure patterns</a>
+      <a href="#verdicts">verdicts</a>
+      <a href="#setup">setup</a>
+      <a href="https://github.com/InsightfulMinds/proof-before-done-editor">github</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <p class="kicker">evidence editor <b>·</b> for agent completion reports</p>
+    <h1><span class="ghost">"Done."</span><br>Says <span class="metal">who?</span></h1>
+    <p class="sub">Your agents write reports that claim they changed files, passed tests, migrated data, deployed services. <strong>Proof Before Done reviews the report itself</strong> — it catches the sentence that says <em>done</em> before the report has earned it, and tells you whether it's safe to accept without redoing the entire task.</p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/InsightfulMinds/proof-before-done-editor">Get the editor → 7 files, MIT</a>
+      <a class="btn" href="#setup">2-minute setup</a>
+      <span class="cta-note">runs as a Claude Project · no install, no API keys</span>
+    </div>
+  </div>
+
+  <div class="term-section">
+    <div class="wrap">
+      <p class="sec-label">live review</p>
+      <div class="term" role="img" aria-label="Terminal transcript: the editor reviews a completion report, quotes a weak claim, names the URL Alive Fallacy, demands a receipt, and stamps the verdict RETURN.">
+        <div class="term-head">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="term-title">proof-before-done — review session</span>
+        </div>
+        <div class="term-body" aria-hidden="true">
+          <div class="t-line" style="animation-delay:.2s"><span class="t-prompt">&gt;</span> Review this completion report.</div>
+          <div class="t-line t-dim" style="animation-delay:.9s">reading… 14 claims found. weakest first:</div>
+          <div class="t-line" style="animation-delay:1.5s">&nbsp;</div>
+          <div class="t-line t-quote" style="animation-delay:1.7s">  "Deployed to production and the site is live."</div>
+          <div class="t-line" style="animation-delay:2.4s">  <span class="t-sev">S1</span><span class="t-flag">URL ALIVE FALLACY</span> — a 200 from the homepage is not proof the</div>
+          <div class="t-line" style="animation-delay:2.6s">  deploy shipped <em>this</em> change. The old build answers 200 too.</div>
+          <div class="t-line" style="animation-delay:3.2s">  <span class="t-ask">PROVE:</span> response containing a marker unique to the new build.</div>
+          <div class="t-line" style="animation-delay:3.7s">&nbsp;</div>
+          <div class="t-line" style="animation-delay:3.9s"><span class="t-prompt">verdict</span> → 1 × S1, 2 × S2. not safe to accept as written.<span class="cursor"></span></div>
+        </div>
+        <div class="stamp-row"><span class="stamp" aria-hidden="true">RETURN</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="demo">
+    <div class="wrap">
+      <p class="sec-label">try it on a real report</p>
+      <h2>Paste a report. Or break one of ours and see what changes.</h2>
+      <p class="lede">Three sample reports below are drawn from <strong>real incidents</strong> — the kind that got past a tired reader. Edit the text, run the review, watch the verdict move.</p>
+      <div class="demo-grid">
+        <div class="demo-col">
+          <h3>Completion report</h3>
+          <div class="sample-tabs" role="group" aria-label="Sample reports">
+            <button class="sample-tab" data-sample="deploy" aria-pressed="true">deploy report</button>
+            <button class="sample-tab" data-sample="backup" aria-pressed="false">backup report</button>
+            <button class="sample-tab" data-sample="bugfix" aria-pressed="false">bug-fix report</button>
+          </div>
+          <textarea id="reportInput" class="report-input" aria-label="Completion report to review" spellcheck="false"></textarea>
+          <div class="demo-run">
+            <button class="btn primary" id="runReview">Review this report ▸</button>
+            <span class="cta-note">the full editor runs in a Claude Project — this is the pocket version</span>
+          </div>
+        </div>
+        <div class="demo-col">
+          <h3>Findings</h3>
+          <div class="demo-out" id="demoOut" aria-live="polite">
+            <p class="placeholder">verdict prints here — findings quote the exact weak sentence.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="failures">
+    <div class="wrap">
+      <p class="sec-label">named failure patterns</p>
+      <h2>It doesn't say "needs more detail." It names the exact way the evidence fails.</h2>
+      <p class="lede">Every finding quotes the weak sentence, names the pattern, states <strong>who gets burned when it's wrong</strong>, and returns the minimum receipt plus the one question the writer must answer. Three of the patterns it hunts:</p>
+      <div class="patterns">
+        <article class="pattern">
+          <div class="num">PATTERN / 01</div>
+          <h3>URL Alive Fallacy</h3>
+          <p>"The site returns 200, so the deploy worked." A live URL proves a server answers — <em>not that your change is the thing answering.</em> Receipt required: evidence unique to the new build.</p>
+        </article>
+        <article class="pattern">
+          <div class="num">PATTERN / 02</div>
+          <h3>Denominator Drop</h3>
+          <p>"Migrated 4,000 records successfully." Out of how many? A count with no denominator hides every failure. <em>Receipt required: attempted vs. succeeded vs. skipped, and where the skipped ones went.</em></p>
+        </article>
+        <article class="pattern">
+          <div class="num">PATTERN / 03</div>
+          <h3>Human Gate Erasure</h3>
+          <p>"Done — just needs your sign-off to go live." That's not done; that's <em>waiting on a human gate</em> reworded to sound finished. The report must say what is blocked, on whom, and what happens if the gate never opens.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="verdicts">
+    <div class="wrap">
+      <p class="sec-label">three verdicts, no essays</p>
+      <h2>Every review ends in one word you can act on.</h2>
+      <p class="lede">The editor critiques the report — <strong>it never rewrites it.</strong> No softened phrasing, no "here's a better version." The writer keeps the pen; the reader gets a decision.</p>
+      <div class="verdicts">
+        <article class="verdict accept">
+          <div class="word">ACCEPT</div>
+          <p>Claims are bounded, receipts attached, risks and next actions stated. Safe to build on without re-verifying the work yourself.</p>
+        </article>
+        <article class="verdict return">
+          <div class="word">RETURN</div>
+          <p>Fixable evidence gaps. Comes back with exact STOP / PROVE / CLARIFY findings — the writer knows precisely which receipt is missing.</p>
+        </article>
+        <article class="verdict escalate">
+          <div class="word">ESCALATE</div>
+          <p>The report hides risk a reader would step on — destructive actions glossed over, boundaries erased. A human needs eyes on this before anyone acts on it.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="sec-label">the discipline</p>
+      <h2>Rules the editor holds itself to.</h2>
+      <div class="rules" style="margin-top:34px">
+        <div class="rule"><span class="mark">01</span><div><b>Quotes, never paraphrases.</b> Every finding pins the exact sentence under review — you can grep the original report for it.</div></div>
+        <div class="rule"><span class="mark">02</span><div><b>Never rewrites.</b> The moment an editor starts wordsmithing, it stops being a check and becomes a co-author grading its own prose.</div></div>
+        <div class="rule"><span class="mark">03</span><div><b>Minimum receipt, not maximum ceremony.</b> Each finding names the smallest artifact that would settle the claim — an exit code, a diff line, a curl body.</div></div>
+        <div class="rule"><span class="mark">04</span><div><b>Reviews the report, not the codebase.</b> It judges whether the writing earns trust — deciding whether the underlying work is good is your job, made cheaper.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="number-band">
+    <div class="wrap">
+      <div class="big">94 / 100</div>
+      <p class="under">Final score from the fifth of <b>five isolated adversarial review passes</b> — rubric attack, architecture audit, anti-rewrite red team, stranger-utility review, strict judging — before this editor was allowed to call itself done. It gets held to its own standard.</p>
+    </div>
+  </div>
+
+  <section id="setup" style="border-top:1px solid var(--line)">
+    <div class="wrap">
+      <p class="sec-label">setup</p>
+      <h2>Running in two minutes. Seven markdown files, zero infrastructure.</h2>
+      <div class="steps" style="margin-top:30px">
+        <div class="step"><div><b>Create a Claude Project</b> and add all seven files from the repo to its knowledge — identity, rules, examples, and the three reference matrices.</div></div>
+        <div class="step"><div><b>Paste one line into the Instructions field:</b> <code>Act as the Proof Before Done editor defined in these files; follow identity.md and rules.md on every message.</code></div></div>
+        <div class="step"><div><b>Drop in any agent's completion report</b> and say <code>Review this completion report.</code> You get a verdict, severity-tagged findings, and the exact receipts to demand.</div></div>
+      </div>
+      <div class="cta-row" style="margin-top:40px">
+        <a class="btn primary" href="https://github.com/InsightfulMinds/proof-before-done-editor">github.com/InsightfulMinds/proof-before-done-editor</a>
+        <span class="cta-note">MIT licensed · works with any agent's reports — Claude Code, Codex, or human</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap foot-row">
+    <span>PROOF BEFORE DONE — an InsightfulMinds editor</span>
+    <span><a href="https://github.com/InsightfulMinds/proof-before-done-editor">source</a> · MIT · no tracking, no external requests</span>
+  </div>
+</footer>
+
+<script>
+document.documentElement.classList.add('js');
+(function(){
+  var term=document.querySelector('.term');
+  if(!term)return;
+  function play(){term.classList.add('play')}
+  if(!('IntersectionObserver' in window)){play();return}
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){play();io.disconnect()}});
+  },{threshold:.35});
+  io.observe(term);
+  setTimeout(play,8000); /* fallback: never leave the terminal blank */
+})();
+
+/* ---- in-page review demo. window.PBD is the hook point for the full engine. ---- */
+(function(){
+  var SAMPLES={
+    deploy:'Deployed the new checkout flow to production. The site is live — curl returns 200. Also tidied a few old build artifacts while I was in there. Done.',
+    backup:'Backed up all client folders to the external drive and freed 400GB by removing the originals from the laptop. Backup completed successfully.',
+    bugfix:'Fixed the date-parsing bug in invoice import (#214). Wrote the failing repro test first (test_invoice_dates); it now passes. Full suite: 212/212 green, exit 0. Change limited to parse_dates() in importer.py — 7-line diff. Not touched: the export path. Known limit: dates before 2000 still unhandled, tracked in #219. Nothing is waiting on a human.'
+  };
+  var RULES=[
+    {sev:'S1',esc:false,name:'URL ALIVE FALLACY',
+     when:function(t){return /\b(live|deployed|in production)\b/i.test(t)&&/\b(200|responds|loads|up)\b/i.test(t)&&!/\b(marker|hash|build[- ]?id|version string|unique)\b/i.test(t)},
+     quote:/[^.]*\b(?:live|200|deployed)\b[^.]*\./i,
+     note:'a 200 proves a server answers — not that THIS change is the thing answering. The old build returns 200 too.',
+     ask:'PROVE: a response containing a marker unique to the new build.'},
+    {sev:'S1',esc:true,name:'DESTRUCTIVE STEP, NO RECEIPT',
+     when:function(t){return /\b(remov(ed|ing)|delet(ed|ing)|dropp(ed|ing)|wiped|cleaned)\b/i.test(t)&&!/\b(restore(d)? test|verified restore|checksum|dry[- ]run|recycle|trash|reversible)\b/i.test(t)},
+     quote:/[^.]*\b(?:remov|delet|dropp|wiped|cleaned)\w*\b[^.]*\./i,
+     note:'something was destroyed before anyone proved the copy works. If the backup is bad, this sentence is where the data ended.',
+     ask:'PROVE: a successful restore of at least one file, run AFTER the removal claim was written.'},
+    {sev:'S1',esc:false,name:'DENOMINATOR DROP',
+     when:function(t){return /\ball\b|\bevery\b/i.test(t)&&!/\d+\s*(?:\/|of|out of)\s*\d+/i.test(t)},
+     quote:/[^.]*\b(?:all|every)\b[^.]*\./i,
+     note:'"all" is a count with no denominator. A total that was never stated cannot be checked.',
+     ask:'PROVE: attempted vs. succeeded vs. skipped — with the source count.'},
+    {sev:'S2',esc:false,name:'SCOPE CREEP, UNLOGGED',
+     when:function(t){return /\b(also|while I was|while in there)\b/i.test(t)&&/\b(cleaned|removed|fixed|updated|refactored)\b/i.test(t)},
+     quote:/[^.]*\b(?:also|while I was|while in there)\b[^.]*\./i,
+     note:'work nobody asked for, described in half a sentence. Unrequested changes are where surprises live.',
+     ask:'CLARIFY: exactly what was touched, and where the list of it is.'},
+    {sev:'S2',esc:false,name:'NAKED SUCCESS CLAIM',
+     when:function(t){return /\b(done|successfully|complete(d)?)\b/i.test(t)&&!/\b(exit 0|\d+\/\d+|diff|test|green|log)\b/i.test(t)},
+     quote:/[^.]*\b(?:done|successfully|completed?)\b[^.]*\./i,
+     note:'"done" with no artifact attached. A claim that cannot point at its receipt has not earned the word.',
+     ask:'PROVE: the artifact — exit code, test count, diff, or log line.'}
+  ];
+  function review(text){
+    var findings=[];
+    RULES.forEach(function(r){
+      if(r.when(text)){
+        var m=text.match(r.quote);
+        findings.push({sev:r.sev,esc:r.esc,name:r.name,quote:m?m[0].trim():'',note:r.note,ask:r.ask});
+      }
+    });
+    var verdict=findings.some(function(f){return f.esc})?'ESCALATE':(findings.some(function(f){return f.sev==='S1'})?'RETURN':(findings.length?'RETURN':'ACCEPT'));
+    return {findings:findings,verdict:verdict};
+  }
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+  function render(res,out){
+    var h=[],d=0,step=0.28;
+    function line(html){h.push('<div class="d-line" style="animation-delay:'+d.toFixed(2)+'s">'+html+'</div>');d+=step}
+    line('<span class="t-prompt">&gt;</span> review complete. '+res.findings.length+' material finding'+(res.findings.length===1?'':'s')+'.');
+    res.findings.forEach(function(f){
+      line('&nbsp;');
+      if(f.quote)line('<span class="t-quote">  “'+esc(f.quote)+'”</span>');
+      line('  <span class="t-sev">'+f.sev+'</span><span class="t-flag">'+esc(f.name)+'</span> — '+esc(f.note));
+      line('  <span class="t-ask">'+esc(f.ask)+'</span>');
+    });
+    if(!res.findings.length){line('&nbsp;');line('<span class="t-dim">claims bounded, receipts attached, limits and next actions stated.</span>');line('<span class="t-dim">NO MATERIAL FINDINGS.</span>')}
+    out.innerHTML=h.join('');
+    var stamp=document.createElement('span');
+    stamp.className='demo-stamp v-'+res.verdict.toLowerCase();
+    stamp.style.animationDelay=(d+0.2)+'s';
+    stamp.textContent=res.verdict;
+    out.appendChild(stamp);
+  }
+  var input=document.getElementById('reportInput'),out=document.getElementById('demoOut'),
+      tabs=document.querySelectorAll('.sample-tab'),run=document.getElementById('runReview');
+  if(!input)return;
+  input.value=SAMPLES.deploy;
+  tabs.forEach(function(b){
+    b.addEventListener('click',function(){
+      tabs.forEach(function(x){x.setAttribute('aria-pressed','false')});
+      b.setAttribute('aria-pressed','true');
+      input.value=SAMPLES[b.getAttribute('data-sample')];
+      out.innerHTML='<p class="placeholder">verdict prints here — findings quote the exact weak sentence.</p>';
+    });
+  });
+  run.addEventListener('click',function(){render(review(input.value),out)});
+  window.PBD={samples:SAMPLES,rules:RULES,review:review,render:render};
+})();
+</script>
+
+</body>
+</html>
